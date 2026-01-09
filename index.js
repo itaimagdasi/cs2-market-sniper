@@ -87,7 +87,9 @@ const updatePricesAutomatically = async () => {
         await new Promise(r => setTimeout(r, 5000));
       } catch (err) { console.error(`Error with ${skin.name}`); }
     }
-  } catch (err) { console.error("Update loop error", err.message); }
+  } catch (err) { 
+  console.error(`❌ Error with ${skin.name}: ${err.response?.status || err.message}`); 
+}
 };
 
 // הרצה כל 5 דקות

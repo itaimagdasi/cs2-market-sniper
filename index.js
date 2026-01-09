@@ -49,8 +49,12 @@ const updatePricesAutomatically = async () => {
   console.log("🕒 [Auto-Scan] Fetching prices from Skinport API...");
   try {
     const response = await axios.get('https://api.skinport.com/v1/items?app_id=730&currency=USD', {
-      headers: { 'Accept-Encoding': 'gzip' } // אופטימיזציה להורדה מהירה
-    });
+  headers: {
+    'Accept': 'application/json', // זה פותר את שגיאת ה-406
+    'Accept-Encoding': 'gzip',
+    'User-Agent': 'CS2-Analyzer-Project (Contact: itai@example.com)' // זה עוזר למנוע חסימות
+  }
+});
 
     const allPrices = response.data; // Skinport מחזירה מערך (Array)
     const skins = await Skin.find();

@@ -7,11 +7,10 @@ require('dotenv').config();
 const app = express();
 app.use(cors());
 app.use(express.json());
-
 // --- הגדרות טלגרם - שים כאן את הפרטים שקיבלת מה-BotFather ---
 const TELEGRAM_TOKEN = '8598444559:AAGNxge2dQik-t614jAmDAAo7dpdvC7MLeQ';
 const CHAT_ID = '5447811587';
-
+const MONGO_URI = process.env.MONGO_URI;
 // פונקציה לשליחת הודעה לטלגרם
 const sendTelegramAlert = async (message) => {
   try {
@@ -24,29 +23,22 @@ const sendTelegramAlert = async (message) => {
 };
 
 // חיבור ל-MongoDB
-mongoose.connect(process.env.MONGO_URI)
+mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ MongoDB Connection Error:', err));
 
-// מודל נתונים כולל היסטוריה, יעד Sniper ומחיר חיצוני
 const SkinSchema = new mongoose.Schema({
   name: String,
   price: { type: Number, default: 0 },
   targetPrice: { type: Number, default: 0 },
   externalPrice: { type: Number, default: 0 },
-  priceHistory: [
-    {
-      price: Number,
-      date: { type: Date, default: Date.now }
-    }
-  ],
+  priceHistory: [{ price: Number, date: { type: Date, default: Date.now } }],
   lastUpdated: { type: Date, default: Date.now }
 });
 
 const Skin = mongoose.model('Skin', SkinSchema);
 
-// פונקציה לחישוב ממוצע נע פשוט (SMA)
-// מחשבת ממוצע של ה-10 עדכונים האחרונים כדי לזהות מגמות
+// חישוב ממוצע נע (SMA)
 const calculateSMA = (history, period = 10) => {
   if (!history || history.length === 0) return 0;
   const recent = history.slice(-period);
@@ -54,46 +46,52 @@ const calculateSMA = (history, period = 10) => {
   return (sum / recent.length).toFixed(2);
 };
 
-// --- פונקציית עדכון אוטומטית (Background Sniper) ---
+// --- פונקציית עדכון אוטומטית באמצעות CSGOBackpack (מונע חסימות) ---
 const updatePricesAutomatically = async () => {
-  console.log("🕒 [Auto-Scan] Checking market prices...");
+  console.log("🕒 [Auto-Scan] Fetching global price list from CSGOBackpack...");
   try {
-    const skins = await Skin.find();
-    for (const skin of skins) {
-      const url = `https://steamcommunity.com/market/priceoverview/?appid=730&currency=1&market_hash_name=${encodeURIComponent(skin.name)}`;
-      
-      try {
-        const response = await axios.get(url);
-        if (response.data && response.data.success) {
-          const priceString = response.data.lowest_price || response.data.median_price || "0";
-          const price = parseFloat(priceString.replace('$', '').replace(',', ''));
-          const sma = calculateSMA(skin.priceHistory, 10);
-
-          // 1. בדיקת Sniper (מחיר יעד)
-          if (skin.targetPrice > 0 && price <= skin.targetPrice) {
-            await sendTelegramAlert(`🎯 SNIPER HIT!\nסקין: ${skin.name}\nמחיר: $${price}\nמחיר יעד: $${skin.targetPrice}`);
-          } 
-          // 2. בדיקת צניחת מחיר חריגה (מתחת לממוצע הנע)
-          else if (sma > 0 && price < sma * 0.95) {
-            await sendTelegramAlert(`📉 PRICE DROP!\n${skin.name} צנח ל-$${price}\nהממוצע הנוכחי הוא $${sma}`);
-          }
-
-          await Skin.findByIdAndUpdate(skin._id, {
-            $set: { price, lastUpdated: Date.now() },
-            $push: { priceHistory: { price, date: Date.now() } }
-          });
-        }
-        // השהיה למניעת חסימה מ-Steam
-        await new Promise(r => setTimeout(r, 10000));
-      } catch (err) { console.error(`Error with ${skin.name}`); }
+    // משיכת כל המחירים בבקשה אחת בלבד
+    const response = await axios.get('https://csgobackpack.net/api/GetItemPriceList/v2/');
+    if (!response.data || !response.data.success) {
+      console.log("⚠️ API check failed, will retry in the next cycle.");
+      return;
     }
-  } catch (err) { 
-  console.error(`❌ Error with ${skin.name}: ${err.response?.status || err.message}`); 
-}
+
+    const allPrices = response.data.items_list;
+    const skins = await Skin.find();
+
+    for (const skin of skins) {
+      const itemData = allPrices[skin.name];
+      
+      if (itemData && itemData.price && itemData.price["24_hours"]) {
+        const price = parseFloat(itemData.price["24_hours"].average);
+        const sma = calculateSMA(skin.priceHistory, 10);
+
+        // בדיקת Sniper
+        if (skin.targetPrice > 0 && price <= skin.targetPrice) {
+          await sendTelegramAlert(`🎯 SNIPER HIT!\nנשק: ${skin.name}\nמחיר: $${price}\nיעד: $${skin.targetPrice}`);
+        } 
+        // בדיקת צניחה מתחת לממוצע הנע
+        else if (sma > 0 && price < sma * 0.95) {
+          await sendTelegramAlert(`📉 PRICE DROP!\n${skin.name} צנח ל-$${price}\nממוצע: $${sma}`);
+        }
+
+        await Skin.findByIdAndUpdate(skin._id, {
+          $set: { price, lastUpdated: Date.now() },
+          $push: { priceHistory: { price, date: Date.now() } }
+        });
+        console.log(`✅ Updated: ${skin.name} -> $${price}`);
+      } else {
+        console.log(`⚠️ No price data for: ${skin.name}`);
+      }
+    }
+  } catch (err) {
+    console.error("❌ API Update Error:", err.message);
+  }
 };
 
-// הרצה כל 5 דקות
-setInterval(updatePricesAutomatically, 15 * 60 * 1000);
+// הרצה כל 10 דקות (בטוח ויציב)
+setInterval(updatePricesAutomatically, 10 * 60 * 1000);
 
 // --- API Routes ---
 
@@ -111,18 +109,14 @@ app.get('/api/tracked-skins', async (req, res) => {
 app.post('/api/track-skin', async (req, res) => {
   try {
     const { name } = req.body;
-    const url = `https://steamcommunity.com/market/priceoverview/?appid=730&currency=1&market_hash_name=${encodeURIComponent(name)}`;
-    const response = await axios.get(url);
-    const priceString = response.data.lowest_price || "0";
-    const price = parseFloat(priceString.replace('$', '').replace(',', ''));
-
-    const updated = await Skin.findOneAndUpdate(
+    // בהוספה ראשונית אנחנו רק שומרים את השם, הסריקה הבאה תביא את המחיר
+    const newSkin = await Skin.findOneAndUpdate(
       { name },
-      { $set: { price, lastUpdated: Date.now() }, $push: { priceHistory: { price } } },
+      { name },
       { upsert: true, new: true }
     );
-    res.status(201).json(updated);
-  } catch (err) { res.status(500).json({ error: "Steam API Error" }); }
+    res.status(201).json(newSkin);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.patch('/api/update-data/:id', async (req, res) => {
@@ -141,8 +135,9 @@ app.delete('/api/delete-skin/:id', async (req, res) => {
   res.json({ message: "Deleted" });
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Sniper Server running on http://localhost:${PORT}`);
-  updatePricesAutomatically(); // הרצה ראשונה מיד עם ההפעלה
+  console.log(`🚀 Sniper Server running on port ${PORT}`);
+  // הרצה מיידית עם העלייה
+  setTimeout(updatePricesAutomatically, 5000); 
 });

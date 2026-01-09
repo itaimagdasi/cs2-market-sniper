@@ -19,13 +19,13 @@ const sendTelegramAlert = async (message) => {
     await axios.post(url, { chat_id: CHAT_ID, text: message });
     console.log("📱 Telegram Alert Sent!");
   } catch (e) {
-    console.error("❌ Telegram Error:", e.message);
+    console.error("❌ Telegram Error: " + e.message);
   }
 };
 
 mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
-  .catch(err => console.error('❌ MongoDB Connection Error:', err));
+  .catch(err => console.error('❌ MongoDB Connection Error: ' + err));
 
 const SkinSchema = new mongoose.Schema({
   name: String,
@@ -50,11 +50,18 @@ const updatePricesAutomatically = async () => {
   try {
     const response = await axios.get('https://csgobackpack.net/api/GetItemPriceList/v2/', {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
       }
     });
 
-    if (!response.data || !response.data.success) return;
+    if (!response.data || !response.data.success) {
+      console.log("⚠️ API returned success: false");
+      return;
+    }
 
     const allPrices = response.data.items_list;
     const skins = await Skin.find();
@@ -76,16 +83,18 @@ const updatePricesAutomatically = async () => {
       }
     }
   } catch (err) {
-    console.error(`❌ API Update Error: ${err.message}`);
+    console.error(`❌ API Update Error (403/Blocked): Your local IP might be temporarily restricted by the provider. Please try again in 5 minutes.`);
   }
 };
 
 setInterval(updatePricesAutomatically, 10 * 60 * 1000);
 
 app.get('/api/tracked-skins', async (req, res) => {
-  const skins = await Skin.find().sort({ lastUpdated: -1 });
-  const results = skins.map(s => ({ ...s._doc, sma: calculateSMA(s.priceHistory, 10) }));
-  res.json(results);
+  try {
+    const skins = await Skin.find().sort({ lastUpdated: -1 });
+    const results = skins.map(s => ({ ...s._doc, sma: calculateSMA(s.priceHistory, 10) }));
+    res.json(results);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/track-skin', async (req, res) => {
@@ -93,23 +102,24 @@ app.post('/api/track-skin', async (req, res) => {
     const { name } = req.body;
     const newSkin = await Skin.findOneAndUpdate({ name }, { name }, { upsert: true, new: true });
     res.status(201).json(newSkin);
-    console.log(`🚀 New skin added: ${name}. Triggering immediate scan...`);
+    console.log(`🚀 New skin added: ${name}. Triggering scan...`);
     updatePricesAutomatically(); 
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.patch('/api/update-data/:id', async (req, res) => {
-  const { targetPrice, externalPrice } = req.body;
-  const update = {};
-  if (targetPrice !== undefined) update.targetPrice = Number(targetPrice);
-  if (externalPrice !== undefined) update.externalPrice = Number(externalPrice);
-  await Skin.findByIdAndUpdate(req.params.id, update);
-  res.json({ message: "Updated" });
+  try {
+    const { targetPrice } = req.body;
+    await Skin.findByIdAndUpdate(req.params.id, { targetPrice: Number(targetPrice) });
+    res.json({ message: "Updated" });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.delete('/api/delete-skin/:id', async (req, res) => {
-  await Skin.findByIdAndDelete(req.params.id);
-  res.json({ message: "Deleted" });
+  try {
+    await Skin.findByIdAndDelete(req.params.id);
+    res.json({ message: "Deleted" });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 const PORT = process.env.PORT || 10000;

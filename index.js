@@ -31,7 +31,6 @@ const SkinSchema = new mongoose.Schema({
   name: String,
   price: { type: Number, default: 0 },
   targetPrice: { type: Number, default: 0 },
-  externalPrice: { type: Number, default: 0 },
   priceHistory: [{ price: Number, date: { type: Date, default: Date.now } }],
   lastUpdated: { type: Date, default: Date.now }
 });
@@ -45,32 +44,25 @@ const calculateSMA = (history, period = 10) => {
   return (sum / recent.length).toFixed(2);
 };
 
+// פונקציית עדכון באמצעות Skinport API - הרבה יותר יציב לשרתים
 const updatePricesAutomatically = async () => {
-  console.log("🕒 [Auto-Scan] Fetching global prices...");
+  console.log("🕒 [Auto-Scan] Fetching prices from Skinport API...");
   try {
-    const response = await axios.get('https://csgobackpack.net/api/GetItemPriceList/v2/', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      }
+    const response = await axios.get('https://api.skinport.com/v1/items?app_id=730&currency=USD', {
+      headers: { 'Accept-Encoding': 'gzip' } // אופטימיזציה להורדה מהירה
     });
 
-    if (!response.data || !response.data.success) {
-      console.log("⚠️ API returned success: false");
-      return;
-    }
-
-    const allPrices = response.data.items_list;
+    const allPrices = response.data; // Skinport מחזירה מערך (Array)
     const skins = await Skin.find();
 
     for (const skin of skins) {
-      const itemData = allPrices[skin.name];
-      if (itemData && itemData.price && itemData.price["24_hours"]) {
-        const price = parseFloat(itemData.price["24_hours"].average);
-        
+      // חיפוש הסקין בתוך המערך הגדול שחזר מה-API
+      const itemData = allPrices.find(i => i.market_hash_name === skin.name);
+      
+      if (itemData && itemData.min_price) {
+        const price = itemData.min_price;
+        const sma = calculateSMA(skin.priceHistory, 10);
+
         if (skin.targetPrice > 0 && price <= skin.targetPrice) {
           await sendTelegramAlert(`🎯 SNIPER HIT!\nItem: ${skin.name}\nPrice: $${price}\nTarget: $${skin.targetPrice}`);
         }
@@ -80,14 +72,16 @@ const updatePricesAutomatically = async () => {
           $push: { priceHistory: { price, date: Date.now() } }
         });
         console.log(`✅ Updated: ${skin.name} to $${price}`);
+      } else {
+        console.log(`⚠️ No price found for: ${skin.name}`);
       }
     }
   } catch (err) {
-    console.error(`❌ API Update Error (403/Blocked): Your local IP might be temporarily restricted by the provider. Please try again in 5 minutes.`);
+    console.error(`❌ API Error: ${err.message}`);
   }
 };
 
-setInterval(updatePricesAutomatically, 10 * 60 * 1000);
+setInterval(updatePricesAutomatically, 15 * 60 * 1000); // עדכון כל 15 דקות
 
 app.get('/api/tracked-skins', async (req, res) => {
   try {
@@ -102,7 +96,6 @@ app.post('/api/track-skin', async (req, res) => {
     const { name } = req.body;
     const newSkin = await Skin.findOneAndUpdate({ name }, { name }, { upsert: true, new: true });
     res.status(201).json(newSkin);
-    console.log(`🚀 New skin added: ${name}. Triggering scan...`);
     updatePricesAutomatically(); 
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -124,6 +117,6 @@ app.delete('/api/delete-skin/:id', async (req, res) => {
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`🚀 Sniper Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
   setTimeout(updatePricesAutomatically, 5000); 
 });

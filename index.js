@@ -13,7 +13,6 @@ app.use(express.json());
 const TELEGRAM_TOKEN = '8598444559:AAGNxge2dQik-t614jAmDAAo7dpdvC7MLeQ';
 const CHAT_ID = '5447811587';
 const MONGO_URI = process.env.MONGO_URI;
-// פונקציה לשליחת הודעה לטלגרם
 const sendTelegramAlert = async (message) => {
   try {
     const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
@@ -24,7 +23,6 @@ const sendTelegramAlert = async (message) => {
   }
 };
 
-// חיבור ל-MongoDB - המערכת כבר אישרה חיבור תקין
 mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ MongoDB Connection Error:', err));
@@ -40,7 +38,6 @@ const SkinSchema = new mongoose.Schema({
 
 const Skin = mongoose.model('Skin', SkinSchema);
 
-// חישוב ממוצע נע (SMA) לפי הנוסחה: SMA = (1/n) * sum(Pi)
 const calculateSMA = (history, period = 10) => {
   if (!history || history.length === 0) return 0;
   const recent = history.slice(-period);
@@ -48,9 +45,9 @@ const calculateSMA = (history, period = 10) => {
   return (sum / recent.length).toFixed(2);
 };
 
-// פונקציית עדכון אוטומטית - כוללת User-Agent למניעת שגיאת 403
+// פונקציית הסריקה
 const updatePricesAutomatically = async () => {
-  console.log("🕒 [Auto-Scan] Fetching global price list from CSGOBackpack...");
+  console.log("🕒 [Auto-Scan] Fetching global price list...");
   try {
     const response = await axios.get('https://csgobackpack.net/api/GetItemPriceList/v2/', {
       headers: {
@@ -58,24 +55,18 @@ const updatePricesAutomatically = async () => {
       }
     });
 
-    if (!response.data || !response.data.success) {
-      console.log("⚠️ API check failed, success flag is false.");
-      return;
-    }
+    if (!response.data || !response.data.success) return;
 
     const allPrices = response.data.items_list;
     const skins = await Skin.find();
 
     for (const skin of skins) {
       const itemData = allPrices[skin.name];
-      
       if (itemData && itemData.price && itemData.price["24_hours"]) {
         const price = parseFloat(itemData.price["24_hours"].average);
-        const sma = calculateSMA(skin.priceHistory, 10);
-
-        // בדיקת Sniper והתראות
+        
         if (skin.targetPrice > 0 && price <= skin.targetPrice) {
-          await sendTelegramAlert(`🎯 SNIPER HIT!\n${skin.name}\nמחיר נוכחי: $${price}\nמחיר יעד: $${skin.targetPrice}`);
+          await sendTelegramAlert(`🎯 SNIPER HIT!\n${skin.name}\nמחיר: $${price}`);
         }
 
         await Skin.findByIdAndUpdate(skin._id, {
@@ -83,56 +74,45 @@ const updatePricesAutomatically = async () => {
           $push: { priceHistory: { price, date: Date.now() } }
         });
         console.log(`✅ Updated: ${skin.name} to $${price}`);
-      } else {
-        console.log(`⚠️ Price data missing for: ${skin.name}`);
       }
     }
   } catch (err) {
-    console.error(`❌ API Update Error: ${err.response?.status || err.message}`);
+    console.error(`❌ API Update Error: ${err.message}`);
   }
 };
 
-// סריקה כל 10 דקות
 setInterval(updatePricesAutomatically, 10 * 60 * 1000);
 
 // --- API Routes ---
 
 app.get('/api/tracked-skins', async (req, res) => {
-  try {
-    const skins = await Skin.find().sort({ lastUpdated: -1 });
-    const results = skins.map(s => ({
-      ...s._doc,
-      sma: calculateSMA(s.priceHistory, 10)
-    }));
-    res.json(results);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  const skins = await Skin.find().sort({ lastUpdated: -1 });
+  const results = skins.map(s => ({ ...s._doc, sma: calculateSMA(s.priceHistory, 10) }));
+  res.json(results);
 });
 
 app.post('/api/track-skin', async (req, res) => {
   try {
     const { name } = req.body;
-    console.log(`📩 Request to add skin: ${name}`);
-    const newSkin = await Skin.findOneAndUpdate(
-      { name },
-      { name },
-      { upsert: true, new: true }
-    );
+    const newSkin = await Skin.findOneAndUpdate({ name }, { name }, { upsert: true, new: true });
+    
+    // שליחת תשובה מיידית ל-Frontend
     res.status(201).json(newSkin);
-  } catch (err) { 
-    console.error("❌ DB Error during track-skin:", err.message);
-    res.status(500).json({ error: err.message }); 
-  }
+    
+    // הרצת סריקה מיד לאחר ההוספה כדי לעדכן את ה-0 דולר
+    console.log(`🚀 New skin added: ${name}. Triggering immediate scan...`);
+    updatePricesAutomatically(); 
+    
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.patch('/api/update-data/:id', async (req, res) => {
-  try {
-    const { targetPrice, externalPrice } = req.body;
-    const update = {};
-    if (targetPrice !== undefined) update.targetPrice = Number(targetPrice);
-    if (externalPrice !== undefined) update.externalPrice = Number(externalPrice);
-    await Skin.findByIdAndUpdate(req.params.id, update);
-    res.json({ message: "Updated" });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  const { targetPrice, externalPrice } = req.body;
+  const update = {};
+  if (targetPrice !== undefined) update.targetPrice = Number(targetPrice);
+  if (externalPrice !== undefined) update.externalPrice = Number(externalPrice);
+  await Skin.findByIdAndUpdate(req.params.id, update);
+  res.json({ message: "Updated" });
 });
 
 app.delete('/api/delete-skin/:id', async (req, res) => {
@@ -140,10 +120,8 @@ app.delete('/api/delete-skin/:id', async (req, res) => {
   res.json({ message: "Deleted" });
 });
 
-// שימוש בפורט ש-Render מקצה או ב-10000 כברירת מחדל
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`🚀 Sniper Server running on port ${PORT}`);
-  // סריקה ראשונית 10 שניות אחרי העלייה
-  setTimeout(updatePricesAutomatically, 10000); 
+  setTimeout(updatePricesAutomatically, 5000); 
 });

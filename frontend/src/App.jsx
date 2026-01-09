@@ -113,10 +113,11 @@ function App() {
                         src={skin.image} 
                         alt={skin.name} 
                         className="skin-icon" 
+                        /* הוספת 2 השורות האלו היא קריטית לעקיפת החסימה של Steam */
                         referrerPolicy="no-referrer"
-                        crossOrigin="anonymous"
-                        loading="lazy"
-                      />
+                        crossOrigin="anonymous" 
+                        onError={(e) => { e.target.src = 'https://via.placeholder.com/50?text=CS2'; }}
+                    />
                     ) : (
                       <div className="no-image">⌛</div>
                     )}

@@ -1,2 +1,34 @@
-CS2 Market Sniper & Analyzer 🎯An automated Fullstack MERN application designed to track Counter-Strike 2 skin prices, analyze market trends using statistical models, and provide real-time alerts via Telegram.🚀 Live DemoWeb Interface: [Link to your Render URL]API Endpoint: [Link to your Render Backend URL]🛠️ Tech StackFrontend: React (Vite), Recharts (Data Visualization), Axios.Backend: Node.js, Express.js.Database: MongoDB Atlas (NoSQL).Cloud Hosting: Render (Web Service & Static Site).DevOps: GitHub Actions for CI/CD, Environment Variables management.✨ Key FeaturesReal-time Price Scanning: Integrates with CSGOBackpack API to fetch global market data, overcoming Steam's aggressive rate-limiting (429/403 errors) using custom headers and aggregator logic.Trend Analysis: Implements a Simple Moving Average (SMA) algorithm to identify price drops and market anomalies.Formula: $$SMA = \frac{1}{n} \sum_{i=1}^{n} P_i$$Instant Notifications: Automated Telegram Bot integration that sends push notifications whenever a skin hits a predefined "Target Price".Dynamic Visualization: Interactive price history charts with SMA overlays to assist in trade decision-making.🏗️ System ArchitectureThe system consists of three main layers:Background Worker: A scheduled task that fetches market prices every 10 minutes and calculates statistical indicators.REST API: Handles skin tracking requests, database CRUD operations, and manual price triggers.Responsive UI: A dashboard for managing the portfolio, setting target prices, and visualizing trends.🔧 Installation & SetupClone the repository: git clone [Your Repo Link]Install dependencies:Bashnpm install && cd frontend && npm install
-Create a .env file in the root with:MONGO_URITELEGRAM_TOKENCHAT_IDRun locally: npm start
+# CS2 Market Sniper & Analyzer 🎯
+
+A professional Fullstack MERN application for tracking Counter-Strike 2 skin prices, analyzing market trends, and delivering real-time alerts via Telegram.
+
+## 🚀 Overview
+This project was developed to solve the challenge of monitoring volatile virtual asset prices. It implements a robust backend scanner that overcomes public API rate-limiting and provides statistical insights for traders.
+
+## 🛠️ Tech Stack
+* **Frontend:** React.js (Vite), Recharts for data visualization.
+* **Backend:** Node.js, Express.js.
+* **Database:** MongoDB Atlas (NoSQL) for persistent data storage.
+* **Cloud Hosting:** Render (Automated CI/CD from GitHub).
+* **Integrations:** Telegram Bot API for push notifications.
+
+## ✨ Key Features & Technical Challenges
+* **Advanced API Integration:** Successfully implemented a workaround for Steam's Rate-Limiting (429/403 errors) by transitioning to an Aggregator API (CSGOBackpack) and using custom User-Agent headers.
+* **Statistical Analysis:** Built-in calculation of the Simple Moving Average (SMA) to identify market entry points.
+* **Real-time Sniper:** Automated background worker that triggers Telegram alerts the moment a skin hits its target price.
+* **Data Consistency:** Full CRUD operations with Mongoose, ensuring data integrity across market updates.
+
+## 📊 Mathematical Logic
+The analyzer utilizes a Simple Moving Average (SMA) over a window of the last 10 data points to smooth out price volatility:
+SMA = (Sum of prices) / (Number of periods)
+
+## 🏗️ Architecture
+1. **The Scanner:** A Node.js background loop that fetches global prices every 10 minutes.
+2. **The API:** RESTful endpoints for managing the tracking list and historical data.
+3. **The Dashboard:** A responsive React interface for real-time visualization.
+
+## ⚙️ Setup & Deployment
+1. Clone the repository.
+2. Configure Environment Variables: `MONGO_URI`, `TELEGRAM_TOKEN`, `CHAT_ID`.
+3. Install dependencies: `npm install`.
+4. Run locally or deploy to Render/Vercel.

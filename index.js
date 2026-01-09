@@ -45,7 +45,7 @@ const Skin = mongoose.model('Skin', SkinSchema);
 // פונקציית הסריקה המרכזית עם מנגנון נעילה
 const updatePricesAutomatically = async () => {
   if (isScanning) {
-    console.log("⚠️ Scan already in progress, skipping to avoid 429 error...");
+    console.log("⚠️ Scan already in progress, skipping...");
     return;
   }
 
@@ -55,9 +55,13 @@ const updatePricesAutomatically = async () => {
   try {
     const response = await axios.get('https://api.skinport.com/v1/items?app_id=730&currency=USD', {
       headers: {
-        'Accept': 'application/json',
-        'Accept-Encoding': 'gzip',
-        'User-Agent': 'CS2-Market-Sniper-V3-SafeMode'
+        // שימוש ב-User-Agent של דפדפן Chrome אמיתי ומעודכן
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Cache-Control': 'max-age=0'
       }
     });
 
@@ -72,12 +76,6 @@ const updatePricesAutomatically = async () => {
           const price = itemData.min_price;
           const imageUrl = itemData.image;
 
-          // בדיקת התראת טלגרם
-          if (skin.targetPrice > 0 && price <= skin.targetPrice) {
-            await sendTelegramAlert(`🎯 SNIPER HIT!\nItem: ${skin.name}\nPrice: $${price}\nTarget: $${skin.targetPrice}`);
-          }
-
-          // עדכון מסד הנתונים עם מחיר ותמונה
           await Skin.findByIdAndUpdate(skin._id, {
             $set: { price, image: imageUrl, lastUpdated: Date.now() },
             $push: { priceHistory: { price, date: Date.now() } }
@@ -88,13 +86,15 @@ const updatePricesAutomatically = async () => {
     }
     console.log("🏁 Scan completed successfully.");
   } catch (err) {
-    if (err.response?.status === 429) {
-      console.error("❌ API Error 429: Too many requests. Skinport has rate-limited this IP.");
+    if (err.response?.status === 406) {
+      console.error("❌ API Error 406: Skinport rejected the request headers. Trying to look more like a real browser.");
+    } else if (err.response?.status === 429) {
+      console.error("❌ API Error 429: Rate limit hit. Cooling down...");
     } else {
       console.error(`❌ API Error: ${err.message}`);
     }
   } finally {
-    isScanning = false; // שחרור הנעילה בכל מקרה
+    isScanning = false;
   }
 };
 

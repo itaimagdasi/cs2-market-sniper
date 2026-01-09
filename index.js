@@ -13,6 +13,7 @@ app.use(express.json());
 const TELEGRAM_TOKEN = '8598444559:AAGNxge2dQik-t614jAmDAAo7dpdvC7MLeQ';
 const CHAT_ID = '5447811587';
 const MONGO_URI = process.env.MONGO_URI;
+// Telegram Alert Logic
 const sendTelegramAlert = async (message) => {
   try {
     const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
@@ -23,10 +24,12 @@ const sendTelegramAlert = async (message) => {
   }
 };
 
+// Database Connection
 mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ MongoDB Connection Error: ' + err));
 
+// Database Schema
 const SkinSchema = new mongoose.Schema({
   name: String,
   price: { type: Number, default: 0 },
@@ -37,6 +40,7 @@ const SkinSchema = new mongoose.Schema({
 
 const Skin = mongoose.model('Skin', SkinSchema);
 
+// Statistical Logic: Simple Moving Average (SMA)
 const calculateSMA = (history, period = 10) => {
   if (!history || history.length === 0) return 0;
   const recent = history.slice(-period);
@@ -44,48 +48,53 @@ const calculateSMA = (history, period = 10) => {
   return (sum / recent.length).toFixed(2);
 };
 
-// פונקציית עדכון באמצעות Skinport API - הרבה יותר יציב לשרתים
+// Core Scanner Logic - Skinport API Implementation
 const updatePricesAutomatically = async () => {
   console.log("🕒 [Auto-Scan] Fetching prices from Skinport API...");
   try {
     const response = await axios.get('https://api.skinport.com/v1/items?app_id=730&currency=USD', {
-  headers: {
-    'Accept': 'application/json', // זה פותר את שגיאת ה-406
-    'Accept-Encoding': 'gzip',
-    'User-Agent': 'CS2-Analyzer-Project (Contact: itai@example.com)' // זה עוזר למנוע חסימות
-  }
-});
+      headers: {
+        'Accept': 'application/json', // CRITICAL: Fixes 406 error
+        'Accept-Encoding': 'gzip',
+        'User-Agent': 'CS2-Market-Sniper-V2'
+      }
+    });
 
-    const allPrices = response.data; // Skinport מחזירה מערך (Array)
-    const skins = await Skin.find();
+    if (response.data && Array.isArray(response.data)) {
+      const allItems = response.data;
+      const skins = await Skin.find();
 
-    for (const skin of skins) {
-      // חיפוש הסקין בתוך המערך הגדול שחזר מה-API
-      const itemData = allPrices.find(i => i.market_hash_name === skin.name);
-      
-      if (itemData && itemData.min_price) {
-        const price = itemData.min_price;
-        const sma = calculateSMA(skin.priceHistory, 10);
+      for (const skin of skins) {
+        // Find matching skin in the Skinport array
+        const itemData = allItems.find(i => i.market_hash_name === skin.name);
+        
+        if (itemData && itemData.min_price) {
+          const price = itemData.min_price;
 
-        if (skin.targetPrice > 0 && price <= skin.targetPrice) {
-          await sendTelegramAlert(`🎯 SNIPER HIT!\nItem: ${skin.name}\nPrice: $${price}\nTarget: $${skin.targetPrice}`);
+          // Alert Logic
+          if (skin.targetPrice > 0 && price <= skin.targetPrice) {
+            await sendTelegramAlert(`🎯 SNIPER HIT!\nItem: ${skin.name}\nPrice: $${price}\nTarget: $${skin.targetPrice}`);
+          }
+
+          // Update Database
+          await Skin.findByIdAndUpdate(skin._id, {
+            $set: { price, lastUpdated: Date.now() },
+            $push: { priceHistory: { price, date: Date.now() } }
+          });
+          console.log(`✅ Updated: ${skin.name} to $${price}`);
         }
-
-        await Skin.findByIdAndUpdate(skin._id, {
-          $set: { price, lastUpdated: Date.now() },
-          $push: { priceHistory: { price, date: Date.now() } }
-        });
-        console.log(`✅ Updated: ${skin.name} to $${price}`);
-      } else {
-        console.log(`⚠️ No price found for: ${skin.name}`);
       }
     }
   } catch (err) {
-    console.error(`❌ API Error: ${err.message}`);
+    // Handle 403 or 406 errors by logging clear messages
+    console.error(`❌ API Error: ${err.response?.status || err.message}`);
   }
 };
 
-setInterval(updatePricesAutomatically, 15 * 60 * 1000); // עדכון כל 15 דקות
+// Run scan every 10 minutes
+setInterval(updatePricesAutomatically, 10 * 60 * 1000);
+
+// --- API ROUTES ---
 
 app.get('/api/tracked-skins', async (req, res) => {
   try {
@@ -100,6 +109,8 @@ app.post('/api/track-skin', async (req, res) => {
     const { name } = req.body;
     const newSkin = await Skin.findOneAndUpdate({ name }, { name }, { upsert: true, new: true });
     res.status(201).json(newSkin);
+    // Trigger immediate scan when adding new skin
+    console.log(`🚀 Adding ${name}... Scanning price now.`);
     updatePricesAutomatically(); 
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -108,7 +119,7 @@ app.patch('/api/update-data/:id', async (req, res) => {
   try {
     const { targetPrice } = req.body;
     await Skin.findByIdAndUpdate(req.params.id, { targetPrice: Number(targetPrice) });
-    res.json({ message: "Updated" });
+    res.json({ message: "Target updated" });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -121,6 +132,7 @@ app.delete('/api/delete-skin/:id', async (req, res) => {
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Sniper Server running on port ${PORT}`);
+  // Initial scan 5 seconds after startup
   setTimeout(updatePricesAutomatically, 5000); 
 });

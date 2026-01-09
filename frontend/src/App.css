@@ -6,7 +6,6 @@
   --accent: #ff9800;
   --text-main: #e0e0e0;
   --success: #4caf50;
-  --danger: #f44336;
 }
 
 body {
@@ -14,14 +13,9 @@ body {
   font-family: 'Inter', sans-serif;
   background-color: var(--bg-color);
   color: var(--text-main);
-  direction: ltr; /* English only */
 }
 
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 40px 20px;
-}
+.container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
 
 header {
   display: flex;
@@ -32,110 +26,38 @@ header {
   padding-bottom: 20px;
 }
 
-h1 {
-  font-weight: 800;
-  letter-spacing: -1px;
-  background: linear-gradient(90deg, #fff, var(--accent));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-/* Input Group Styling */
 .input-group {
   background: var(--card-bg);
   padding: 20px;
   border-radius: 12px;
   display: flex;
   gap: 15px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
   margin-bottom: 30px;
 }
 
-input {
-  flex: 1;
-  background: #2a2a2a;
-  border: 1px solid #444;
-  padding: 12px 18px;
-  border-radius: 8px;
-  color: white;
-  font-size: 1rem;
+input { flex: 1; background: #2a2a2a; border: 1px solid #444; padding: 12px; border-radius: 8px; color: white; }
+
+button { background: var(--accent); color: #000; border: none; padding: 12px 25px; border-radius: 8px; font-weight: 700; cursor: pointer; }
+
+/* עיצוב התמונות בטבלה */
+.skin-icon {
+  width: 50px;
+  height: auto;
+  filter: drop-shadow(0 0 5px rgba(0,0,0,0.5));
+  transition: transform 0.2s;
 }
 
-button {
-  background: var(--accent);
-  color: #000;
-  border: none;
-  padding: 12px 25px;
-  border-radius: 8px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: 0.2s ease;
-}
+.skin-icon:hover { transform: scale(1.8); }
 
-button:hover {
-  transform: translateY(-2px);
-  filter: brightness(1.1);
-}
+.dashboard-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 30px; }
 
-/* Dashboard Grid */
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 30px;
-}
+.table-container, .chart-container { background: var(--card-bg); border-radius: 12px; padding: 20px; }
 
-@media (max-width: 900px) {
-  .dashboard-grid { grid-template-columns: 1fr; }
-}
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; color: #888; padding: 15px; font-size: 0.8rem; }
+td { padding: 10px 15px; border-bottom: 1px solid #2a2a2a; vertical-align: middle; }
 
-/* Table Styling */
-.table-container {
-  background: var(--card-bg);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-}
+.active-row { background: rgba(255, 152, 0, 0.05); border-left: 4px solid var(--accent); }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th {
-  background: #252525;
-  padding: 15px;
-  text-align: left;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  color: #888;
-}
-
-td {
-  padding: 18px 15px;
-  border-bottom: 1px solid #2a2a2a;
-}
-
-.active-row {
-  background: rgba(255, 152, 0, 0.05);
-  border-left: 4px solid var(--accent);
-}
-
-/* Chart Container */
-.chart-container {
-  background: var(--card-bg);
-  padding: 25px;
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-}
-
-.chart-container h3 {
-  margin-top: 0;
-  color: var(--accent);
-}
-
-/* Help Button Customization */
-.help-icon-btn {
-  background: transparent;
-  border: 1px solid #444;
-  color: #aaa;
-}
+.delete-btn { background: #333; color: white; padding: 5px 10px; }
+.delete-btn:hover { background: #f44336; }

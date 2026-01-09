@@ -44,24 +44,14 @@ const Skin = mongoose.model('Skin', SkinSchema);
 
 // פונקציית הסריקה המרכזית עם מנגנון נעילה
 const updatePricesAutomatically = async () => {
-  if (isScanning) {
-    console.log("⚠️ Scan already in progress, skipping...");
-    return;
-  }
-
+  if (isScanning) return;
   isScanning = true;
-  console.log("🕒 [Auto-Scan] Fetching prices and images from Skinport...");
-
+  
   try {
     const response = await axios.get('https://api.skinport.com/v1/items?app_id=730&currency=USD', {
       headers: {
-        // שימוש ב-User-Agent של דפדפן Chrome אמיתי ומעודכן
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
-        'Cache-Control': 'max-age=0'
+        'Accept': 'application/json'
       }
     });
 
@@ -72,27 +62,25 @@ const updatePricesAutomatically = async () => {
       for (const skin of skins) {
         const itemData = allItems.find(i => i.market_hash_name === skin.name);
         
-        if (itemData && itemData.min_price) {
-          const price = itemData.min_price;
-          const imageUrl = itemData.image;
+        if (itemData) {
+          const price = itemData.min_price || skin.price;
+          // וידוא משיכת התמונה - Skinport לפעמים משתמשים ב-item_page או image
+          const imageUrl = itemData.image || itemData.item_page || ""; 
 
           await Skin.findByIdAndUpdate(skin._id, {
-            $set: { price, image: imageUrl, lastUpdated: Date.now() },
+            $set: { 
+              price, 
+              image: imageUrl, // שמירה מפורשת
+              lastUpdated: Date.now() 
+            },
             $push: { priceHistory: { price, date: Date.now() } }
           });
-          console.log(`✅ Updated: ${skin.name} ($${price})`);
+          console.log(`✅ Sync OK: ${skin.name} | Image: ${imageUrl ? 'Found' : 'Missing'}`);
         }
       }
     }
-    console.log("🏁 Scan completed successfully.");
   } catch (err) {
-    if (err.response?.status === 406) {
-      console.error("❌ API Error 406: Skinport rejected the request headers. Trying to look more like a real browser.");
-    } else if (err.response?.status === 429) {
-      console.error("❌ API Error 429: Rate limit hit. Cooling down...");
-    } else {
-      console.error(`❌ API Error: ${err.message}`);
-    }
+    console.error("❌ Scan Error:", err.message);
   } finally {
     isScanning = false;
   }

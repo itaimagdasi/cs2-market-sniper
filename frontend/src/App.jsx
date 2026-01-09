@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
+// הכתובת החדשה של השרת שלך ב-Render
+const API_URL = "https://cs2-market-sniper.onrender.com";
+
 const styles = {
   container: { backgroundColor: '#121212', color: 'white', minHeight: '100vh', padding: '20px', direction: 'rtl', fontFamily: 'Arial' },
   card: { backgroundColor: '#1e1e1e', padding: '20px', borderRadius: '12px', marginBottom: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' },
@@ -23,38 +26,59 @@ function App() {
   const [name, setName] = useState('');
   const [selectedId, setSelectedId] = useState(null);
 
+  // משיכת נתונים מהשרת בענן
   const fetchSkins = async () => {
     try {
-      const res = await axios.get('http://localhost:3000/api/tracked-skins');
+      const res = await axios.get(`${API_URL}/api/tracked-skins`);
       setSkins(res.data);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error("שגיאה במשיכת נתונים מהשרת:", e);
+    }
   };
 
   useEffect(() => {
     fetchSkins();
+    // רענון אוטומטי כל 15 שניות
     const interval = setInterval(fetchSkins, 15000);
     return () => clearInterval(interval);
   }, []);
 
-  // חישוב נתוני פורטפוליו
+  // חישוב נתוני הפורטפוליו
   const totalValue = skins.reduce((acc, s) => acc + s.price, 0);
   const totalPotentialProfit = skins.reduce((acc, s) => {
     const net = s.price * 0.85;
     return acc + (s.externalPrice > 0 ? (net - s.externalPrice) : 0);
   }, 0);
 
+  // עדכון מחיר יעד או מחיר חיצוני
   const updateData = async (id, field, value) => {
-    await axios.patch(`http://localhost:3000/api/update-data/${id}`, { [field]: value });
-    fetchSkins();
+    try {
+      await axios.patch(`${API_URL}/api/update-data/${id}`, { [field]: value });
+      fetchSkins();
+    } catch (e) {
+      console.error("שגיאה בעדכון הנתונים:", e);
+    }
+  };
+
+  // הוספת סקין חדש
+  const addSkin = async () => {
+    if (!name) return;
+    try {
+      await axios.post(`${API_URL}/api/track-skin`, { name });
+      setName('');
+      fetchSkins();
+    } catch (e) {
+      alert("שגיאה: ייתכן והסקין לא נמצא ב-Steam או שיש עומס על ה-API");
+    }
   };
 
   const currentSkin = skins.find(s => s._id === selectedId);
 
   return (
     <div style={styles.container}>
-      <h1 style={{ textAlign: 'center', color: '#4caf50', marginBottom: '30px' }}>🎯 CS2 Sniper Portfolio</h1>
+      <h1 style={{ textAlign: 'center', color: '#4caf50', marginBottom: '30px' }}>🎯 CS2 Market Sniper (Cloud Edition)</h1>
 
-      {/* כרטיס סיכום פורטפוליו */}
+      {/* סיכום פורטפוליו */}
       <div style={styles.summaryCard}>
         <div style={styles.stat}>
           <span style={{ color: '#888' }}>שווי שוק כולל</span>
@@ -77,9 +101,9 @@ function App() {
           style={{ padding: '12px', borderRadius: '6px', width: '350px', backgroundColor: '#2a2a2a', color: 'white', border: '1px solid #444', marginLeft: '15px', textAlign: 'right' }} 
           value={name} 
           onChange={e => setName(e.target.value)} 
-          placeholder="הוסף סקין חדש (למשל: AK-47 | Slate (Field-Tested))" 
+          placeholder="הכנס שם סקין מלא (למשל: AK-47 | Slate (Field-Tested))" 
         />
-        <button style={styles.btn} onClick={async () => { await axios.post('http://localhost:3000/api/track-skin', { name }); setName(''); fetchSkins(); }}>הוסף למעקב</button>
+        <button style={styles.btn} onClick={addSkin}>הוסף למעקב</button>
       </div>
 
       <div style={styles.card}>
@@ -88,7 +112,7 @@ function App() {
             <tr>
               <th style={{ ...styles.th, width: '25%' }}>סקין</th>
               <th style={{ ...styles.th, width: '15%' }}>מחיר Steam</th>
-              <th style={{ ...styles.th, width: '15%' }}>מחיר קנייה</th>
+              <th style={{ ...styles.th, width: '15%' }}>מחיר קנייה (חוץ)</th>
               <th style={{ ...styles.th, width: '20%' }}>רווח (נקי)</th>
               <th style={{ ...styles.th, width: '15%' }}>יעד Sniper</th>
               <th style={{ ...styles.th, width: '10%' }}>מחיקה</th>
@@ -114,7 +138,7 @@ function App() {
                     <input type="number" style={styles.input} defaultValue={s.targetPrice || ''} onBlur={(e) => updateData(s._id, 'targetPrice', e.target.value)} />
                   </td>
                   <td style={styles.td}>
-                    <button onClick={() => axios.delete(`http://localhost:3000/api/delete-skin/${s._id}`).then(fetchSkins)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>🗑️</button>
+                    <button onClick={() => axios.delete(`${API_URL}/api/delete-skin/${s._id}`).then(fetchSkins)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px' }}>🗑️</button>
                   </td>
                 </tr>
               );
@@ -132,10 +156,9 @@ function App() {
                 <CartesianGrid stroke="#333" vertical={false} />
                 <XAxis dataKey="date" tickFormatter={t => new Date(t).toLocaleTimeString()} stroke="#888" fontSize={10} />
                 <YAxis stroke="#888" domain={['auto', 'auto']} />
-                <Tooltip contentStyle={{ backgroundColor: '#222', border: 'none' }} />
+                <Tooltip contentStyle={{ backgroundColor: '#222', border: 'none', color: '#fff' }} />
                 <Legend verticalAlign="top" height={36}/>
                 <Line name="מחיר שוק ($)" type="monotone" dataKey="price" stroke="#4caf50" strokeWidth={3} dot={false} />
-                {/* קו הממוצע הנע (SMA) */}
                 <Line name="ממוצע (SMA)" type="monotone" dataKey="price" stroke="#ff9800" strokeDasharray="5 5" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>

@@ -99,9 +99,31 @@ setInterval(updatePricesAutomatically, 10 * 60 * 1000);
 app.get('/api/tracked-skins', async (req, res) => {
   try {
     const skins = await Skin.find().sort({ lastUpdated: -1 });
-    const results = skins.map(s => ({ ...s._doc, sma: calculateSMA(s.priceHistory, 10) }));
+    
+    const results = skins.map(skin => {
+      // חישוב SMA עבור כל נקודה בהיסטוריה כדי שהגרף יוכל לצייר קו
+      const historyWithSMA = skin.priceHistory.map((point, index) => {
+        // לוקח את 10 הנקודות האחרונות עד לנקודה הנוכחית
+        const window = skin.priceHistory.slice(Math.max(0, index - 9), index + 1);
+        const avg = window.reduce((acc, curr) => acc + curr.price, 0) / window.length;
+        
+        return { 
+          price: point.price, 
+          date: point.date, 
+          sma: parseFloat(avg.toFixed(2)) // זה המפתח שהגרף מחפש
+        };
+      });
+      
+      return { 
+        ...skin.toObject(), 
+        priceHistory: historyWithSMA 
+      };
+    });
+    
     res.json(results);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { 
+    res.status(500).json({ error: err.message }); 
+  }
 });
 
 app.post('/api/track-skin', async (req, res) => {

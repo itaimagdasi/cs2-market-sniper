@@ -1,0 +1,15 @@
+:root { --bg: #0b0e11; --card: #1e2329; --primary: #f0b90b; --text: #eaecef; }
+body { background: var(--bg); color: var(--text); font-family: sans-serif; margin: 0; direction: ltr; }
+.container { max-width: 1000px; margin: 40px auto; padding: 20px; }
+.input-card { background: var(--card); padding: 20px; border-radius: 8px; display: flex; gap: 10px; margin-bottom: 20px; }
+input { background: #2b3139; border: 1px solid #474d57; color: white; padding: 10px; border-radius: 4px; flex: 1; }
+button { background: var(--primary); color: black; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; cursor: pointer; }
+.table-card { background: var(--card); border-radius: 8px; padding: 20px; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; color: #848e9c; padding-bottom: 15px; }
+td { padding: 15px 0; border-top: 1px solid #2b3139; }
+.badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+.buy { background: #2ebd85; color: white; }
+.wait { background: #474d57; color: #848e9c; }
+.price-drop { color: #2ebd85; font-weight: bold; }
+.btn-del { background: none; color: #f6465d; border: 1px solid #f6465d; padding: 5px 10px; }

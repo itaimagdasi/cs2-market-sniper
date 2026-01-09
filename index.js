@@ -13,7 +13,7 @@ app.use(express.json());
 const TELEGRAM_TOKEN = '8598444559:AAGNxge2dQik-t614jAmDAAo7dpdvC7MLeQ';
 const CHAT_ID = '5447811587';
 const MONGO_URI = process.env.MONGO_URI;
-// Telegram Alert Logic
+// Telegram Notification Logic
 const sendTelegramAlert = async (message) => {
   try {
     const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
@@ -29,7 +29,7 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ MongoDB Connection Error: ' + err));
 
-// Database Schema
+// Database Schema and Model
 const SkinSchema = new mongoose.Schema({
   name: String,
   price: { type: Number, default: 0 },
@@ -40,7 +40,7 @@ const SkinSchema = new mongoose.Schema({
 
 const Skin = mongoose.model('Skin', SkinSchema);
 
-// Statistical Logic: Simple Moving Average (SMA)
+// Statistical Analysis Logic: Simple Moving Average (SMA)
 const calculateSMA = (history, period = 10) => {
   if (!history || history.length === 0) return 0;
   const recent = history.slice(-period);
@@ -48,15 +48,16 @@ const calculateSMA = (history, period = 10) => {
   return (sum / recent.length).toFixed(2);
 };
 
-// Core Scanner Logic - Skinport API Implementation
+// Core Scanner Logic - Skinport API Integration
+// Fixes 406 and 403 errors by mimicking a full browser session
 const updatePricesAutomatically = async () => {
   console.log("🕒 [Auto-Scan] Fetching prices from Skinport API...");
   try {
     const response = await axios.get('https://api.skinport.com/v1/items?app_id=730&currency=USD', {
       headers: {
-        'Accept': 'application/json', // CRITICAL: Fixes 406 error
-        'Accept-Encoding': 'gzip',
-        'User-Agent': 'CS2-Market-Sniper-V2'
+        'Accept': 'application/json', // Critical fix for 406 error
+        'Accept-Encoding': 'gzip, deflate, br', // Browser mimicry
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       }
     });
 
@@ -65,18 +66,17 @@ const updatePricesAutomatically = async () => {
       const skins = await Skin.find();
 
       for (const skin of skins) {
-        // Find matching skin in the Skinport array
         const itemData = allItems.find(i => i.market_hash_name === skin.name);
         
         if (itemData && itemData.min_price) {
           const price = itemData.min_price;
 
-          // Alert Logic
+          // Notification Trigger Logic
           if (skin.targetPrice > 0 && price <= skin.targetPrice) {
             await sendTelegramAlert(`🎯 SNIPER HIT!\nItem: ${skin.name}\nPrice: $${price}\nTarget: $${skin.targetPrice}`);
           }
 
-          // Update Database
+          // DB Persistence
           await Skin.findByIdAndUpdate(skin._id, {
             $set: { price, lastUpdated: Date.now() },
             $push: { priceHistory: { price, date: Date.now() } }
@@ -86,15 +86,15 @@ const updatePricesAutomatically = async () => {
       }
     }
   } catch (err) {
-    // Handle 403 or 406 errors by logging clear messages
+    // Log clear error for debugging IP restrictions or header mismatches
     console.error(`❌ API Error: ${err.response?.status || err.message}`);
   }
 };
 
-// Run scan every 10 minutes
+// Background Loop: 10 minutes interval
 setInterval(updatePricesAutomatically, 10 * 60 * 1000);
 
-// --- API ROUTES ---
+// --- REST API ENDPOINTS ---
 
 app.get('/api/tracked-skins', async (req, res) => {
   try {
@@ -109,8 +109,7 @@ app.post('/api/track-skin', async (req, res) => {
     const { name } = req.body;
     const newSkin = await Skin.findOneAndUpdate({ name }, { name }, { upsert: true, new: true });
     res.status(201).json(newSkin);
-    // Trigger immediate scan when adding new skin
-    console.log(`🚀 Adding ${name}... Scanning price now.`);
+    console.log(`🚀 Manual scan triggered for: ${name}`);
     updatePricesAutomatically(); 
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -119,20 +118,21 @@ app.patch('/api/update-data/:id', async (req, res) => {
   try {
     const { targetPrice } = req.body;
     await Skin.findByIdAndUpdate(req.params.id, { targetPrice: Number(targetPrice) });
-    res.json({ message: "Target updated" });
+    res.json({ message: "Target price updated" });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.delete('/api/delete-skin/:id', async (req, res) => {
   try {
     await Skin.findByIdAndDelete(req.params.id);
-    res.json({ message: "Deleted" });
+    res.json({ message: "Item deleted from tracking" });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Port Management for Cloud Deployment
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`🚀 Sniper Server running on port ${PORT}`);
-  // Initial scan 5 seconds after startup
+  // Run initial scan 5 seconds after server startup
   setTimeout(updatePricesAutomatically, 5000); 
 });

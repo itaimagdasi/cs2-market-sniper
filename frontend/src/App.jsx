@@ -39,8 +39,24 @@ function App() {
       await axios.post(`${API_URL}/track-skin`, { name: newSkinName });
       setNewSkinName('');
       setTimeout(fetchSkins, 3000);
-    } catch (err) { alert("Check skin name."); }
+    } catch (err) { alert("Error adding skin."); }
     finally { setLoading(false); }
+  };
+
+  const deleteSkin = async (id) => {
+    if (!window.confirm("Delete this skin?")) return;
+    try {
+      await axios.delete(`${API_URL}/delete-skin/${id}`);
+      setSkins(prev => prev.filter(s => s._id !== id));
+      if (selectedSkin?._id === id) setSelectedSkin(null);
+    } catch (err) { console.error(err); }
+  };
+
+  const updateTarget = async (id, targetPrice) => {
+    try {
+      await axios.patch(`${API_URL}/update-data/${id}`, { targetPrice });
+      fetchSkins();
+    } catch (err) { console.error(err); }
   };
 
   return (
@@ -60,11 +76,21 @@ function App() {
         <div className="table-container">
           <table>
             <thead>
-              <tr><th>Icon</th><th>Name</th><th>Price</th><th>Target</th></tr>
+              <tr>
+                <th>Icon</th>
+                <th>Name</th>
+                <th>Price</th>
+                <th>Target</th>
+                <th>Action</th> {/* העמודה חזרה! */}
+              </tr>
             </thead>
             <tbody>
               {skins.map(skin => (
-                <tr key={skin._id} onClick={() => setSelectedSkin(skin)} className={selectedSkin?._id === skin._id ? 'active-row' : ''}>
+                <tr 
+                  key={skin._id} 
+                  onClick={() => setSelectedSkin(skin)} 
+                  className={selectedSkin?._id === skin._id ? 'active-row' : ''}
+                >
                   <td>
                     {skin.image ? (
                       <img 
@@ -73,19 +99,32 @@ function App() {
                         className="skin-icon" 
                         referrerPolicy="no-referrer"
                         crossOrigin="anonymous"
-                        /* אם התמונה נכשלת, אנחנו מדפיסים את הלינק לקונסול כדי שתוכל להעתיק אותו ולבדוק */
                         onError={(e) => {
-                          console.log("❌ Image failed for:", skin.name, "URL:", skin.image);
-                          e.target.style.display = 'none'; // מסתיר את האייקון השבור
-                          e.target.nextSibling.style.display = 'block'; // מציג את האמוג'י במקום
+                          e.target.style.display = 'none';
+                          if (e.target.nextSibling) e.target.nextSibling.style.display = 'block';
                         }}
                       />
                     ) : null}
                     <div className="fallback-emoji" style={{ display: 'none', fontSize: '24px' }}>🔫</div>
                   </td>
-                  <td>{skin.name}</td>
-                  <td style={{ color: '#4caf50' }}>${skin.price?.toFixed(2)}</td>
-                  <td>{skin.targetPrice}</td>
+                  <td style={{ fontWeight: '600' }}>{skin.name}</td>
+                  <td style={{ color: '#4caf50', fontWeight: 'bold' }}>
+                    ${skin.price?.toFixed(2) || '0.00'}
+                  </td>
+                  <td>
+                    <input 
+                      type="number" 
+                      className="target-input"
+                      defaultValue={skin.targetPrice} 
+                      onBlur={(e) => updateTarget(skin._id, e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </td>
+                  <td>
+                    <button className="delete-btn" onClick={(e) => { e.stopPropagation(); deleteSkin(skin._id); }}>
+                      🗑️
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -93,16 +132,19 @@ function App() {
         </div>
 
         <div className="chart-container">
-          <h3>Trend: {selectedSkin?.name}</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={selectedSkin?.priceHistory || []}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-              <XAxis dataKey="date" hide />
-              <YAxis domain={['auto', 'auto']} />
-              <Tooltip contentStyle={{ backgroundColor: '#1a1a1a' }} />
-              <Line type="monotone" dataKey="price" stroke="#4caf50" strokeWidth={3} dot={{ r: 4 }} />
-            </LineChart>
-          </ResponsiveContainer>
+          <h3>Trend: {selectedSkin?.name || 'Select a skin'}</h3>
+          <div style={{ width: '100%', height: 300 }}>
+            <ResponsiveContainer>
+              <LineChart data={selectedSkin?.priceHistory || []}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                <XAxis dataKey="date" hide />
+                <YAxis domain={['auto', 'auto']} stroke="#888" />
+                <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #444' }} />
+                <Line type="monotone" dataKey="price" stroke="#4caf50" strokeWidth={3} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="sma" stroke="#ff9800" strokeDasharray="5 5" dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
     </div>

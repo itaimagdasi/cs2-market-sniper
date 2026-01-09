@@ -6,24 +6,23 @@ import {
 } from 'recharts';
 import './App.css';
 
-// כתובת ה-API שלך ב-Render
+// וודא שזו הכתובת המדויקת של ה-API שלך ב-Render
 const API_URL = 'https://cs2-market-sniper.onrender.com/api';
 
 function App() {
   const [skins, setSkins] = useState([]);
   const [newSkinName, setNewSkinName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showGuide, setShowGuide] = useState(false);
   const [selectedSkin, setSelectedSkin] = useState(null);
 
-  // פונקציה יציבה למשיכת נתונים מהשרת
+  // פונקציית טעינת נתונים יציבה
   const fetchSkins = useCallback(async () => {
     try {
       const res = await axios.get(`${API_URL}/tracked-skins`);
       const data = res.data;
       setSkins(data);
       
-      // עדכון אוטומטי של הסקין הנבחר בנתונים החדשים (עבור הגרף)
+      // עדכון הנתונים בגרף אם סקין כבר נבחר
       setSelectedSkin(prev => {
         if (!prev && data.length > 0) return data[0];
         if (prev) return data.find(s => s._id === prev._id) || prev;
@@ -34,10 +33,9 @@ function App() {
     }
   }, []);
 
-  // הרצה ראשונית וקביעת רענון אוטומטי
   useEffect(() => {
     fetchSkins();
-    const interval = setInterval(fetchSkins, 30000); // רענון כל 30 שניות
+    const interval = setInterval(fetchSkins, 30000); // רענון נתונים כל 30 שניות
     return () => clearInterval(interval);
   }, [fetchSkins]);
 
@@ -47,13 +45,21 @@ function App() {
     try {
       await axios.post(`${API_URL}/track-skin`, { name: newSkinName });
       setNewSkinName('');
-      // המתנה קלה כדי לתת לשרת זמן לבצע את הסריקה הראשונית עם התמונה
-      setTimeout(fetchSkins, 3000);
+      setTimeout(fetchSkins, 3000); // המתנה קצרה לעדכון ה-API
     } catch (err) {
-      alert("Error adding skin. Check the name or API status.");
+      alert("Error adding skin. Make sure the name is exact.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const deleteSkin = async (id) => {
+    if (!window.confirm("Delete this skin?")) return;
+    try {
+      await axios.delete(`${API_URL}/delete-skin/${id}`);
+      setSkins(prev => prev.filter(s => s._id !== id));
+      if (selectedSkin?._id === id) setSelectedSkin(null);
+    } catch (err) { console.error(err); }
   };
 
   const updateTarget = async (id, targetPrice) => {
@@ -63,48 +69,17 @@ function App() {
     } catch (err) { console.error(err); }
   };
 
-  const deleteSkin = async (id) => {
-    if (!window.confirm("Delete this skin from tracking?")) return;
-    try {
-      await axios.delete(`${API_URL}/delete-skin/${id}`);
-      setSkins(prev => prev.filter(s => s._id !== id));
-      if (selectedSkin?._id === id) setSelectedSkin(null);
-    } catch (err) { console.error(err); }
-  };
-
   return (
     <div className="container">
       <header>
         <h1>CS2 Market Sniper 🎯</h1>
-        <button className="help-icon-btn" onClick={() => setShowGuide(true)}>
-          ❓ How it works?
-        </button>
       </header>
 
-      {/* מדריך למשתמש */}
-      {showGuide && (
-        <div className="modal-overlay" onClick={() => setShowGuide(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <button className="close-btn" onClick={() => setShowGuide(false)}>&times;</button>
-            <h2>📖 Sniper Guide</h2>
-            <div className="guide-step">
-              <h4>1. Live Tracking</h4>
-              <p>We pull real-time prices and icons directly from the market.</p>
-            </div>
-            <div className="guide-step">
-              <h4>2. Image Protection</h4>
-              <p>We use a custom policy to bypass Steam's hotlink protection.</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* הוספת סקין חדש */}
       <div className="input-group">
         <input 
           value={newSkinName} 
           onChange={(e) => setNewSkinName(e.target.value)}
-          placeholder="e.g. AWP | Asiimov (Field-Tested)"
+          placeholder="e.g. AK-47 | Redline (Field-Tested)"
         />
         <button onClick={addSkin} disabled={loading}>
           {loading ? 'Scanning...' : 'Add Skin'}
@@ -112,7 +87,6 @@ function App() {
       </div>
 
       <div className="dashboard-grid">
-        {/* טבלת מעקב */}
         <div className="table-container">
           <table>
             <thead>
@@ -133,13 +107,15 @@ function App() {
                   style={{ cursor: 'pointer' }}
                 >
                   <td>
-                    {/* התיקון הקריטי: referrerPolicy עוקף את חסימת התמונות של Steam */}
+                    {/* התיקון הקריטי לתמונות: שילוב של no-referrer ו-anonymous */}
                     {skin.image ? (
                       <img 
                         src={skin.image} 
                         alt={skin.name} 
                         className="skin-icon" 
-                        referrerPolicy="no-referrer" 
+                        referrerPolicy="no-referrer"
+                        crossOrigin="anonymous"
+                        loading="lazy"
                       />
                     ) : (
                       <div className="no-image">⌛</div>
@@ -169,7 +145,6 @@ function App() {
           </table>
         </div>
 
-        {/* גרף ניתוח מגמות */}
         <div className="chart-container">
           <h3>Trend: {selectedSkin?.name || 'Select a skin'}</h3>
           <div style={{ width: '100%', height: 350 }}>
@@ -188,7 +163,7 @@ function App() {
                   name="Price ($)" 
                   stroke="#4caf50" 
                   strokeWidth={3} 
-                  dot={false} 
+                  dot={{ r: 4 }} 
                 />
                 <Line 
                   type="monotone" 

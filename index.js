@@ -101,16 +101,16 @@ app.get('/api/tracked-skins', async (req, res) => {
     const skins = await Skin.find().sort({ lastUpdated: -1 });
     
     const results = skins.map(skin => {
-      // חישוב SMA עבור כל נקודה בהיסטוריה כדי שהגרף יוכל לצייר קו
+      // יצירת היסטוריה חדשה שכוללת חישוב SMA לכל נקודה
       const historyWithSMA = skin.priceHistory.map((point, index) => {
-        // לוקח את 10 הנקודות האחרונות עד לנקודה הנוכחית
+        // חישוב ממוצע של עד 10 הנקודות האחרונות עד לנקודה זו
         const window = skin.priceHistory.slice(Math.max(0, index - 9), index + 1);
         const avg = window.reduce((acc, curr) => acc + curr.price, 0) / window.length;
         
         return { 
           price: point.price, 
           date: point.date, 
-          sma: parseFloat(avg.toFixed(2)) // זה המפתח שהגרף מחפש
+          sma: parseFloat(avg.toFixed(2)) // זה המפתח שהגרף מחפש ב-dataKey
         };
       });
       

@@ -84,7 +84,7 @@ const updatePricesAutomatically = async () => {
           });
         }
         // השהיה למניעת חסימה מ-Steam
-        await new Promise(r => setTimeout(r, 5000));
+        await new Promise(r => setTimeout(r, 10000));
       } catch (err) { console.error(`Error with ${skin.name}`); }
     }
   } catch (err) { 
@@ -93,7 +93,7 @@ const updatePricesAutomatically = async () => {
 };
 
 // הרצה כל 5 דקות
-setInterval(updatePricesAutomatically, 5 * 60 * 1000);
+setInterval(updatePricesAutomatically, 15 * 60 * 1000);
 
 // --- API Routes ---
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -6,7 +6,6 @@ import {
 } from 'recharts';
 import './App.css';
 
-// וודא שזו הכתובת המדויקת של ה-Backend שלך ב-Render
 const API_URL = 'https://cs2-market-sniper.onrender.com/api';
 
 function App() {
@@ -16,34 +15,30 @@ function App() {
   const [showGuide, setShowGuide] = useState(false);
   const [selectedSkin, setSelectedSkin] = useState(null);
 
-  // פונקציית משיכת הנתונים - מעדכנת את הסטייט בלי להפעיל לולאה
-  const fetchSkins = async () => {
+  // פונקציה למשיכת נתונים - הוספנו לוגיקה שמונעת קפיצות מיותרות
+  const fetchSkins = useCallback(async () => {
     try {
       const res = await axios.get(`${API_URL}/tracked-skins`);
-      setSkins(res.data);
+      const data = res.data;
+      setSkins(data);
       
-      // עדכון הסקין הנבחר בנתונים החדשים כדי שהגרף יתעדכן בזמן אמת
-      setSelectedSkin(prevSelected => {
-        if (!prevSelected && res.data.length > 0) {
-          return res.data[0]; // בחירה אוטומטית בטעינה ראשונה
-        }
-        if (prevSelected) {
-          // מציאת הגרסה המעודכנת של הסקין שנבחר בתוך הרשימה החדשה
-          return res.data.find(s => s._id === prevSelected._id) || prevSelected;
-        }
-        return prevSelected;
+      // עדכון הנתונים של הסקין הנבחר בלי לשנות את הבחירה עצמה
+      setSelectedSkin(prev => {
+        if (!prev && data.length > 0) return data[0]; // בחירה ראשונית
+        if (prev) return data.find(s => s._id === prev._id) || prev;
+        return prev;
       });
     } catch (err) {
       console.error("Fetch error:", err);
     }
-  };
+  }, []);
 
-  // ה-useEffect המתוקן: רץ רק פעם אחת בטעינה הראשונה (Dependency Array ריק)
+  // ה-useEffect המתוקן: Dependency Array ריק מונע את הלולאה האינסופית
   useEffect(() => {
     fetchSkins();
-    const interval = setInterval(fetchSkins, 30000); // רענון אוטומטי כל 30 שניות
-    return () => clearInterval(interval); // ניקוי ה-Interval בסגירת האתר
-  }, []); // [] מונע את הלולאה האינסופית והריצוד בין הסקינים
+    const interval = setInterval(fetchSkins, 30000); // רענון כל 30 שניות
+    return () => clearInterval(interval);
+  }, [fetchSkins]); // רץ רק פעם אחת בטעינה
 
   const addSkin = async () => {
     if (!newSkinName) return;
@@ -51,7 +46,7 @@ function App() {
     try {
       await axios.post(`${API_URL}/track-skin`, { name: newSkinName });
       setNewSkinName('');
-      setTimeout(fetchSkins, 3000);
+      fetchSkins();
     } catch (err) {
       alert("Error: Name incorrect or server issues.");
     } finally {

@@ -51,17 +51,19 @@ const updatePricesAutomatically = async () => {
         const itemData = allItems.find(i => i.market_hash_name === skin.name);
         
         if (itemData) {
-          const price = itemData.min_price || skin.price;
-          
-          // תיקון קריטי: לוקחים רק את שדה ה-image הישיר (CDN של Steam)
-          // אנחנו מוודאים שזה לא הקישור של עמוד המוצר (item_page)
-          const imageUrl = itemData.image ? `https://community.cloudflare.steamstatic.com/economy/image/${itemData.image}` : "";
+          // חילוץ מחיר ותמונה בצורה בטוחה
+          const price = itemData.min_price || itemData.suggested_price || 0;
+          const imageUrl = itemData.image || ""; 
 
           await Skin.findByIdAndUpdate(skin._id, {
-            $set: { price, image: imageUrl, lastUpdated: Date.now() },
-            $push: { priceHistory: { price, date: Date.now() } }
+            $set: { 
+              price: Number(price), 
+              image: imageUrl, 
+              lastUpdated: Date.now() 
+            },
+            $push: { priceHistory: { price: Number(price), date: Date.now() } }
           });
-          console.log(`✅ Sync OK: ${skin.name}`);
+          console.log(`✅ Updated: ${skin.name} | Price: $${price} | Image: ${imageUrl ? 'Yes' : 'No'}`);
         }
       }
     }

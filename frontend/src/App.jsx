@@ -6,7 +6,6 @@ import {
 } from 'recharts';
 import './App.css';
 
-// וודא שזו הכתובת המדויקת של ה-Backend שלך ב-Render
 const API_URL = 'https://cs2-market-sniper.onrender.com/api';
 
 function App() {
@@ -16,7 +15,6 @@ function App() {
   const [showGuide, setShowGuide] = useState(false);
   const [selectedSkin, setSelectedSkin] = useState(null);
 
-  // טעינת סקינים מה-Database
   const fetchSkins = async () => {
     try {
       const res = await axios.get(`${API_URL}/tracked-skins`);
@@ -31,20 +29,19 @@ function App() {
 
   useEffect(() => {
     fetchSkins();
-    const interval = setInterval(fetchSkins, 30000); // רענון אוטומטי כל 30 שניות
+    const interval = setInterval(fetchSkins, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // הוספת סקין חדש - מפעיל סריקה מיידית בשרת
   const addSkin = async () => {
     if (!newSkinName) return;
     setLoading(true);
     try {
       await axios.post(`${API_URL}/track-skin`, { name: newSkinName });
       setNewSkinName('');
-      setTimeout(fetchSkins, 3000); // המתנה קלה לעדכון המחיר בשרת
+      setTimeout(fetchSkins, 3000);
     } catch (err) {
-      alert("שגיאה: ייתכן והשם לא מדויק או שיש בעיית חיבור לשרת");
+      alert("Error: Skin name might be incorrect or server is down.");
     } finally {
       setLoading(false);
     }
@@ -69,27 +66,26 @@ function App() {
       <header>
         <h1>CS2 Market Sniper 🎯</h1>
         <button className="help-icon-btn" onClick={() => setShowGuide(true)}>
-          ❓ איך זה עובד?
+          ❓ How it works?
         </button>
       </header>
 
-      {/* מדריך למשתמש (Modal) */}
       {showGuide && (
         <div className="modal-overlay" onClick={() => setShowGuide(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <button className="close-btn" onClick={() => setShowGuide(false)}>&times;</button>
-            <h2>📖 מדריך למשתמש</h2>
+            <h2>📖 User Guide</h2>
             <div className="guide-step">
-              <h4>1. הוספת סקין</h4>
-              <p>העתק את השם המדויק מ-Steam. המערכת תבצע סריקה מיידית ותעדכן את המחיר.</p>
+              <h4>1. Add a Skin</h4>
+              <p>Enter the exact name from Steam (e.g., AK-47 | Redline (Field-Tested)). The system will scan the price immediately.</p>
             </div>
             <div className="guide-step">
-              <h4>2. יעד ה-Sniper</h4>
-              <p>הגדר מחיר מטרה. ברגע שמחיר השוק יירד מתחתיו, תקבל הודעה לטלגרם.</p>
+              <h4>2. Set Target Price</h4>
+              <p>Define your sniper target. When the market price drops below this value, you'll receive a Telegram alert.</p>
             </div>
             <div className="guide-step">
-              <h4>3. ניתוח SMA</h4>
-              <p>הגרף מציג ממוצע נע (SMA). אם המחיר מתחת לקו הכתום, ייתכן שיש ירידת מחיר חריגה.</p>
+              <h4>3. SMA Analysis</h4>
+              <p>The chart shows a Simple Moving Average (SMA). If the price is significantly below the orange line, it may indicate a price drop.</p>
             </div>
           </div>
         </div>
@@ -99,10 +95,10 @@ function App() {
         <input 
           value={newSkinName} 
           onChange={(e) => setNewSkinName(e.target.value)}
-          placeholder="למשל: AK-47 | Redline (Field-Tested)"
+          placeholder="e.g. Glock-18 | Candy Apple (Factory New)"
         />
         <button onClick={addSkin} disabled={loading}>
-          {loading ? 'סורק...' : 'הוסף למעקב'}
+          {loading ? 'Scanning...' : 'Add Skin'}
         </button>
       </div>
 
@@ -111,10 +107,10 @@ function App() {
           <table>
             <thead>
               <tr>
-                <th>סקין</th>
-                <th>מחיר Steam</th>
-                <th>יעד Sniper</th>
-                <th>פעולות</th>
+                <th>Skin Name</th>
+                <th>Market Price</th>
+                <th>Target Price</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -139,8 +135,7 @@ function App() {
         </div>
 
         <div className="chart-container">
-          <h3>ניתוח מגמות: {selectedSkin?.name}</h3>
-          {/* פתרון בעיית הגובה של ה-Recharts */}
+          <h3>Trend Analysis: {selectedSkin?.name || 'Select a skin'}</h3>
           <div style={{ width: '100%', height: 350 }}>
             <ResponsiveContainer>
               <LineChart data={selectedSkin?.priceHistory || []}>
@@ -149,23 +144,8 @@ function App() {
                 <YAxis domain={['auto', 'auto']} stroke="#ccc" />
                 <Tooltip contentStyle={{ backgroundColor: '#222', border: '1px solid #444' }} />
                 <Legend />
-                <Line 
-                  type="monotone" 
-                  dataKey="price" 
-                  name="מחיר שוק ($)" 
-                  stroke="#4caf50" 
-                  strokeWidth={2} 
-                  dot={false}
-                />
-                {/* הצגת הממוצע הנע בגרף */}
-                <Line 
-                  type="monotone" 
-                  dataKey="sma" 
-                  name="ממוצע נע (SMA)" 
-                  stroke="#ff9800" 
-                  strokeDasharray="5 5" 
-                  dot={false}
-                />
+                <Line type="monotone" dataKey="price" name="Market Price ($)" stroke="#4caf50" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="sma" name="SMA (Trend)" stroke="#ff9800" strokeDasharray="5 5" dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>

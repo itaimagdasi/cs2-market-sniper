@@ -45,9 +45,8 @@ const calculateSMA = (history, period = 10) => {
   return (sum / recent.length).toFixed(2);
 };
 
-// פונקציית הסריקה
 const updatePricesAutomatically = async () => {
-  console.log("🕒 [Auto-Scan] Fetching global price list...");
+  console.log("🕒 [Auto-Scan] Fetching global prices...");
   try {
     const response = await axios.get('https://csgobackpack.net/api/GetItemPriceList/v2/', {
       headers: {
@@ -66,7 +65,7 @@ const updatePricesAutomatically = async () => {
         const price = parseFloat(itemData.price["24_hours"].average);
         
         if (skin.targetPrice > 0 && price <= skin.targetPrice) {
-          await sendTelegramAlert(`🎯 SNIPER HIT!\n${skin.name}\nמחיר: $${price}`);
+          await sendTelegramAlert(`🎯 SNIPER HIT!\nItem: ${skin.name}\nPrice: $${price}\nTarget: $${skin.targetPrice}`);
         }
 
         await Skin.findByIdAndUpdate(skin._id, {
@@ -83,8 +82,6 @@ const updatePricesAutomatically = async () => {
 
 setInterval(updatePricesAutomatically, 10 * 60 * 1000);
 
-// --- API Routes ---
-
 app.get('/api/tracked-skins', async (req, res) => {
   const skins = await Skin.find().sort({ lastUpdated: -1 });
   const results = skins.map(s => ({ ...s._doc, sma: calculateSMA(s.priceHistory, 10) }));
@@ -95,14 +92,9 @@ app.post('/api/track-skin', async (req, res) => {
   try {
     const { name } = req.body;
     const newSkin = await Skin.findOneAndUpdate({ name }, { name }, { upsert: true, new: true });
-    
-    // שליחת תשובה מיידית ל-Frontend
     res.status(201).json(newSkin);
-    
-    // הרצת סריקה מיד לאחר ההוספה כדי לעדכן את ה-0 דולר
     console.log(`🚀 New skin added: ${name}. Triggering immediate scan...`);
     updatePricesAutomatically(); 
-    
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

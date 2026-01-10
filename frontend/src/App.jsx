@@ -6,7 +6,6 @@ import {
 } from 'recharts';
 import './App.css';
 
-// הכתובת המעודכנת של ה-API שלך ב-Render
 const API_URL = 'https://cs2-market-sniper.onrender.com/api';
 
 function App() {
@@ -15,25 +14,34 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [selectedSkin, setSelectedSkin] = useState(null);
 
-  // פונקציה למשיכת נתונים מהשרת
+  // פונקציית עזר לחישוב ממוצע נע (SMA) על בסיס 5 דגימות אחרונות
+  const addSMAData = (history) => {
+    if (!history) return [];
+    return history.map((point, index) => {
+      const start = Math.max(0, index - 4); // ממוצע של 5 נקודות
+      const subset = history.slice(start, index + 1);
+      const avg = subset.reduce((acc, curr) => acc + curr.price, 0) / subset.length;
+      return { ...point, sma: avg.toFixed(2) };
+    });
+  };
+
   const fetchSkins = useCallback(async () => {
     try {
       const res = await axios.get(`${API_URL}/tracked-skins`);
       const data = res.data;
       setSkins(data);
       
-      // עדכון אוטומטי של הסקין הנבחר בגרף
       setSelectedSkin(prev => {
-        if (!prev && data.length > 0) return data[0];
-        if (prev) return data.find(s => s._id === prev._id) || prev;
-        return prev;
+        const current = prev ? data.find(s => s._id === prev._id) : data[0];
+        if (current) {
+          // חישוב ה-SMA לפני הצגה בגרף
+          return { ...current, priceHistory: addSMAData(current.priceHistory) };
+        }
+        return null;
       });
-    } catch (err) {
-      console.error("Fetch error:", err);
-    }
+    } catch (err) { console.error(err); }
   }, []);
 
-  // רענון נתונים כל 30 שניות
   useEffect(() => {
     fetchSkins();
     const interval = setInterval(fetchSkins, 30000);
@@ -47,11 +55,8 @@ function App() {
       await axios.post(`${API_URL}/track-skin`, { name: newSkinName });
       setNewSkinName('');
       setTimeout(fetchSkins, 3000);
-    } catch (err) {
-      alert("Error adding skin. Check name spelling.");
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { alert("Check name"); }
+    finally { setLoading(false); }
   };
 
   const updateTarget = async (id, targetPrice) => {
@@ -62,7 +67,7 @@ function App() {
   };
 
   const deleteSkin = async (id) => {
-    if (!window.confirm("Delete this skin?")) return;
+    if (!window.confirm("Delete?")) return;
     try {
       await axios.delete(`${API_URL}/delete-skin/${id}`);
       setSkins(prev => prev.filter(s => s._id !== id));
@@ -72,48 +77,30 @@ function App() {
 
   return (
     <div className="container">
-      <header>
-        <h1>CS2 Market Sniper 🎯</h1>
-      </header>
+      <header><h1>CS2 Market Sniper 🎯</h1></header>
 
-      {/* אזור הוספת סקין */}
       <div className="input-group">
         <input 
           value={newSkinName} 
           onChange={(e) => setNewSkinName(e.target.value)}
-          placeholder="e.g. AK-47 | Redline (Minimal Wear)"
+          placeholder="e.g. M4A1-S | Printstream (Field-Tested)"
         />
-        <button onClick={addSkin} disabled={loading}>
-          {loading ? 'Scanning...' : 'Add Skin'}
-        </button>
+        <button onClick={addSkin} disabled={loading}>{loading ? '...' : 'Add Skin'}</button>
       </div>
 
       <div className="dashboard-grid">
-        {/* טבלת מעקב */}
         <div className="table-container">
           <table>
             <thead>
-              <tr>
-                <th>Icon</th>
-                <th>Skin Name</th>
-                <th>Price ($)</th>
-                <th>Target ($)</th>
-                <th>Action</th>
-              </tr>
+              <tr><th>Icon</th><th>Name</th><th>Price</th><th>Target</th><th>Action</th></tr>
             </thead>
             <tbody>
               {skins.map(skin => (
-                <tr 
-                  key={skin._id} 
-                  onClick={() => setSelectedSkin(skin)} 
-                  className={selectedSkin?._id === skin._id ? 'active-row' : ''}
-                >
-                  <td>
-                    <div className="skin-icon-static">🔫</div>
-                  </td>
+                <tr key={skin._id} onClick={() => setSelectedSkin({ ...skin, priceHistory: addSMAData(skin.priceHistory) })} className={selectedSkin?._id === skin._id ? 'active-row' : ''}>
+                  <td><div className="skin-icon-static">🔫</div></td>
                   <td style={{ fontWeight: '600' }}>{skin.name}</td>
                   <td style={{ color: '#4caf50', fontWeight: 'bold' }}>
-                    ${skin.price ? skin.price.toFixed(2) : '---'}
+                    {skin.price > 0 ? `$${skin.price.toFixed(2)}` : '$---'}
                   </td>
                   <td>
                     <input 
@@ -124,18 +111,13 @@ function App() {
                       onClick={(e) => e.stopPropagation()}
                     />
                   </td>
-                  <td>
-                    <button className="delete-btn" onClick={(e) => { e.stopPropagation(); deleteSkin(skin._id); }}>
-                      🗑️
-                    </button>
-                  </td>
+                  <td><button className="delete-btn" onClick={(e) => { e.stopPropagation(); deleteSkin(skin._id); }}>🗑️</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        {/* גרף ניתוח מגמות */}
         <div className="chart-container">
           <h3>Trend: {selectedSkin?.name || 'Select a skin'}</h3>
           <div style={{ width: '100%', height: 350 }}>
@@ -144,26 +126,10 @@ function App() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                 <XAxis dataKey="date" hide />
                 <YAxis domain={['auto', 'auto']} stroke="#888" />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #444', borderRadius: '8px' }} 
-                />
+                <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #444' }} />
                 <Legend verticalAlign="top" height={36}/>
-                <Line 
-                  type="monotone" 
-                  dataKey="price" 
-                  name="Price ($)" 
-                  stroke="#4caf50" 
-                  strokeWidth={3} 
-                  dot={{ r: 4 }} 
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="sma" 
-                  name="SMA (Trend)" 
-                  stroke="#ff9800" 
-                  strokeDasharray="5 5" 
-                  dot={false} 
-                />
+                <Line type="monotone" dataKey="price" name="Price ($)" stroke="#4caf50" strokeWidth={3} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="sma" name="SMA (Trend)" stroke="#ff9800" strokeDasharray="5 5" dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>

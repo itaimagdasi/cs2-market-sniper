@@ -13,6 +13,9 @@ app.use(express.json());
 
 // הגדרת בוט הטלגרם - וודא שהטוקן והצ'אט-איידי מוגדרים ב-Render
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: false });
+export function sendTelegramMessage(text) {
+  return bot.sendMessage(process.env.TELEGRAM_CHAT_ID, text);
+}
 
 const MONGO_URI = process.env.MONGO_URI;
 let isScanning = false;

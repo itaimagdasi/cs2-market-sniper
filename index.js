@@ -1,9 +1,9 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const axios = require('axios');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const TelegramBot = require('node-telegram-bot-api');
+import express from 'express';
+import mongoose from 'mongoose';
+import axios from 'axios';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import TelegramBot from 'node-telegram-bot-api';
 
 dotenv.config();
 
@@ -11,7 +11,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// הגדרת בוט הטלגרם - polling: false כי אנחנו רק שולחים הודעות
+// הגדרת בוט הטלגרם - וודא שהטוקן והצ'אט-איידי מוגדרים ב-Render
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: false });
 
 const MONGO_URI = process.env.MONGO_URI;
@@ -117,7 +117,7 @@ app.delete('/api/delete-skin/:id', async (req, res) => {
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  // המתנה של 5 דקות בעלייה ראשונה למניעת חסימת IP מ-Render
+  console.log(`🚀 Safe Server (ESM) running on port ${PORT}`);
+  // המתנה של 5 דקות בעלייה ראשונה
   setTimeout(updatePricesAutomatically, 5 * 60 * 1000);
 });

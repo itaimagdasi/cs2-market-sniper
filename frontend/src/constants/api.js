@@ -1,0 +1,1 @@
+export const API_URL = 'https://cs2-market-sniper.onrender.com/api';

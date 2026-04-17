@@ -1,12 +1,14 @@
 {
-  "name": "cs2-analyzer-frontend",
+  "name": "cs2-market-sniper",
   "type": "module",
   "private": true,
   "version": "1.0.0",
+  "main": "backend/index.js",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "start": "node backend/index.js",
+    "dev": "node backend/index.js",
+    "build": "echo 'No build step required'",
+    "preview": "echo 'No preview step required'"
   },
   "dependencies": {
     "axios": "^1.13.2",
